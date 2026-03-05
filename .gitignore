@@ -1,0 +1,8 @@
+CNN2D.cache/
+CNN2D.hw/
+CNN2D.ip_user_file/
+CNN2D.runs/
+CNN2D.sim/
+*.xpr
+Inference_251021/
+*.txt
