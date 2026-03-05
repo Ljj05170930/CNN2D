@@ -1,2 +1,2 @@
-# learngit
-a test repository to learn git 
+# CNN2D
+a repo to store RTL code
