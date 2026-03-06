@@ -12,7 +12,7 @@ module WINDOW_50#(
     input wire                 din_valid,
     input wire                 window_en,
 
-    output wire                      window_out_valid,
+    output reg                       window_out_valid,
     output wire [DOUT_WIDTH*NUM-1:0] window_out
 );
 
@@ -25,6 +25,7 @@ reg [DIN_WIDTH-1:0]  cov_buffer3 [0:51];
 
 reg [5:0] col;
 reg [5:0] row;
+reg window_out_valid_ff;
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
@@ -56,38 +57,45 @@ always @(posedge clk or negedge rst_n) begin
             window_out_ff[j] <= 8'b0;
         end
     end
-    else if (col == 6'b0) begin
-        window_out_ff[0] <= 8'b0;
-        window_out_ff[1] <= cov_buffer0[0];
-        window_out_ff[2] <= cov_buffer0[1];
-        window_out_ff[3] <= 8'b0;
-        window_out_ff[4] <= cov_buffer1[0];
-        window_out_ff[5] <= cov_buffer1[1];
-        window_out_ff[6] <= 8'b0;
-        window_out_ff[7] <= cov_buffer2[0];
-        window_out_ff[8] <= cov_buffer2[1];
-    end
-    else if (col == 6'd51) begin
-        window_out_ff[0] <= window_out_ff[1];
-        window_out_ff[1] <= window_out_ff[2];
-        window_out_ff[2] <= 8'b0;
-        window_out_ff[3] <= window_out_ff[4];
-        window_out_ff[4] <= window_out_ff[5];
-        window_out_ff[5] <= 8'b0;
-        window_out_ff[6] <= window_out_ff[7];
-        window_out_ff[7] <= window_out_ff[8];
-        window_out_ff[8] <= 8'b0;
+    else if(window_out_valid_ff)begin
+        if (col == 6'b0) begin
+            window_out_ff[0] <= 8'b0;
+            window_out_ff[1] <= cov_buffer0[1];
+            window_out_ff[2] <= cov_buffer0[2];
+            window_out_ff[3] <= 8'b0;
+            window_out_ff[4] <= cov_buffer1[1];
+            window_out_ff[5] <= cov_buffer1[2];
+            window_out_ff[6] <= 8'b0;
+            window_out_ff[7] <= cov_buffer2[1];
+            window_out_ff[8] <= cov_buffer2[2];
+        end
+        else if (col == 6'd49) begin
+            window_out_ff[0] <= window_out_ff[1];
+            window_out_ff[1] <= window_out_ff[2];
+            window_out_ff[2] <= 8'b0;
+            window_out_ff[3] <= window_out_ff[4];
+            window_out_ff[4] <= window_out_ff[5];
+            window_out_ff[5] <= 8'b0;
+            window_out_ff[6] <= window_out_ff[7];
+            window_out_ff[7] <= window_out_ff[8];
+            window_out_ff[8] <= 8'b0;
+        end
+        else begin
+            window_out_ff[0] <= window_out_ff[1];
+            window_out_ff[1] <= window_out_ff[2];
+            window_out_ff[2] <= cov_buffer0[2];
+            window_out_ff[3] <= window_out_ff[4];
+            window_out_ff[4] <= window_out_ff[5];
+            window_out_ff[5] <= cov_buffer1[2];
+            window_out_ff[6] <= window_out_ff[7];
+            window_out_ff[7] <= window_out_ff[8];
+            window_out_ff[8] <= cov_buffer2[2];
+        end
     end
     else begin
-        window_out_ff[0] <= window_out_ff[1];
-        window_out_ff[1] <= window_out_ff[2];
-        window_out_ff[2] <= cov_buffer0[1];
-        window_out_ff[3] <= window_out_ff[4];
-        window_out_ff[4] <= window_out_ff[5];
-        window_out_ff[5] <= cov_buffer1[1];
-        window_out_ff[6] <= window_out_ff[7];
-        window_out_ff[7] <= window_out_ff[8];
-        window_out_ff[8] <= cov_buffer2[1];
+        for (j = 0; j < 9; j = j + 1) begin
+            window_out_ff[j] <= 8'b0;
+        end
     end
 end
 
@@ -117,19 +125,19 @@ always @(*) begin
            next_state = window_en ? INIT : IDLE; 
         end
         INIT:begin
-            if (col == 6'd51 && row == 6'd1) begin
+            if (col == 6'd49 && row == 6'd1) begin
                 next_state = COV;
             end
             else next_state = INIT;
         end
         COV:begin
-            if (col == 6'd51 && row == 6'd59) begin
+            if (col == 6'd49 && row == 6'd59) begin
                 next_state = LAST_COV;
             end
             else next_state = COV;
         end
         LAST_COV:begin
-            if (col == 6'd51 && row == 6'd61) begin
+            if (col == 6'd49 && row == 6'd61) begin
                 next_state = IDLE;
             end
             else next_state = LAST_COV;
@@ -173,29 +181,29 @@ always @(posedge clk or negedge rst_n) begin
                 cov_buffer3[51] <= 8'b0;
                 if(din_valid)begin
                     if (row[0] == 1'b0) begin
-                        for (i = 1; i < 52 ; i = i + 1) begin
+                        for (i = 2; i < 51 ; i = i + 1) begin
                             cov_buffer1[i-1] <= cov_buffer1[i];
                         end
-                        cov_buffer1[51] <= din_select;
+                        cov_buffer1[50] <= din_select;
                     end
                     else if (row[0] == 1'b1) begin
-                        for (i = 1; i < 52 ; i = i + 1) begin
-                            cov_buffer1[i-1] <= cov_buffer1[i];
+                        for (i = 2; i < 51 ; i = i + 1) begin
+                            cov_buffer2[i-1] <= cov_buffer2[i];
                         end
-                        cov_buffer1[51] <= din_select;
+                        cov_buffer2[50] <= din_select;
                     end
                 end
             end 
             COV:begin
-                if(col == 6'd51)begin
-                    for (i = 1; i < 52 ; i = i + 1) begin
+                if(col == 6'd49)begin
+                    for (i = 2; i < 51 ; i = i + 1) begin
                         cov_buffer0[i-1] <= cov_buffer1[i];
                         cov_buffer1[i-1] <= cov_buffer2[i];
                         cov_buffer2[i-1] <= cov_buffer3[i];
                     end
-                    cov_buffer0[51] <= cov_buffer1[0];
-                    cov_buffer1[51] <= cov_buffer2[0];
-                    cov_buffer2[51] <= din_select;
+                    cov_buffer0[50] <= cov_buffer1[1];
+                    cov_buffer1[50] <= cov_buffer2[1];
+                    cov_buffer2[50] <= din_select;
 
                     cov_buffer0[0]  <= 8'b0;
                     cov_buffer0[51] <= 8'b0;
@@ -207,16 +215,23 @@ always @(posedge clk or negedge rst_n) begin
                     cov_buffer3[51] <= 8'b0;
                 end
                 else begin
-                    for (i = 1; i < 52 ; i = i + 1) begin
+                    for (i = 2; i < 52 ; i = i + 1) begin
                         cov_buffer0[i-1] <= cov_buffer0[i];
                         cov_buffer1[i-1] <= cov_buffer1[i];
                         cov_buffer2[i-1] <= cov_buffer2[i];
                         cov_buffer3[i-1] <= cov_buffer3[i];
                     end
-                    cov_buffer0[51] <= cov_buffer0[0];
-                    cov_buffer1[51] <= cov_buffer1[0];
-                    cov_buffer2[51] <= cov_buffer2[0];
-                    cov_buffer3[51] <= din_select;
+                    cov_buffer0[50] <= cov_buffer0[1];
+                    cov_buffer1[50] <= cov_buffer1[1];
+                    cov_buffer2[50] <= cov_buffer2[1];
+                    cov_buffer3[50] <= din_select;
+                end
+            end
+            LAST_COV:begin
+                for (i = 2; i < 51 ; i = i + 1) begin
+                    cov_buffer0[i-1] <= cov_buffer0[i];
+                    cov_buffer1[i-1] <= cov_buffer1[i];
+                    cov_buffer2[i-1] <= 8'b0;
                 end
             end
             default: begin
@@ -231,5 +246,25 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
+        window_out_valid_ff <= 1'b0;
+    end
+    else if(col == 6'd49 && row == 6'd1) begin
+        window_out_valid_ff <= 1'b1;
+    end
+    else if (col == 6'd49 && row == 6'd61) begin
+        window_out_valid_ff <= 1'b0;
+    end
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
+        window_out_valid <= 1'b0;
+    end
+    else begin
+        window_out_valid <= window_out_valid_ff;
+    end
+end
 
 endmodule
