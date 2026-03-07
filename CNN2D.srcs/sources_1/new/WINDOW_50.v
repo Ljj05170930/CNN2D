@@ -16,16 +16,17 @@ module WINDOW_50#(
     output wire [DOUT_WIDTH*NUM-1:0] window_out
 );
 
-reg [DOUT_WIDTH-1:0] window_out_ff [0:NUM-1];
+reg [DOUT_WIDTH-1:0] win [0:8];
 
-reg [DIN_WIDTH-1:0]  cov_buffer0 [0:51];
-reg [DIN_WIDTH-1:0]  cov_buffer1 [0:51];
-reg [DIN_WIDTH-1:0]  cov_buffer2 [0:51];
-reg [DIN_WIDTH-1:0]  cov_buffer3 [0:51];
+assign window_out = {
+    win[8], win[7], win[6],   
+    win[5], win[4], win[3],   
+    win[2], win[1], win[0]    
+};
 
+reg window_out_valid_ff;
 reg [5:0] col;
 reg [5:0] row;
-reg window_out_valid_ff;
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
@@ -49,200 +50,160 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-integer j;
+
+reg  [5:0]           bram_waddr;
+reg  [DIN_WIDTH-1:0] bram_wdata;
+reg                  bram_we    [0:3];
+wire [DIN_WIDTH-1:0] bram_dout  [0:3];
+reg  [5:0]           bram_raddr;
+
+LINE_RAM u_LINE_RAM_0 (
+    .clka   (clk),
+    .ena    (1'b1),
+    .wea    (bram_we[0]),
+    .addra  (bram_we[0] ? bram_waddr : bram_raddr),
+    .dina   (bram_wdata),
+    .douta  (bram_dout[0])
+);
+
+LINE_RAM u_LINE_RAM_1 (
+    .clka   (clk),
+    .ena    (1'b1),
+    .wea    (bram_we[1]),
+    .addra  (bram_we[1] ? bram_waddr : bram_raddr),
+    .dina   (bram_wdata),
+    .douta  (bram_dout[1])
+);
+
+LINE_RAM u_LINE_RAM_2 (
+    .clka   (clk),
+    .ena    (1'b1),
+    .wea    (bram_we[2]),
+    .addra  (bram_we[2] ? bram_waddr : bram_raddr),
+    .dina   (bram_wdata),
+    .douta  (bram_dout[2])
+);
+
+LINE_RAM u_LINE_RAM_3 (
+    .clka   (clk),
+    .ena    (1'b1),
+    .wea    (bram_we[3]),
+    .addra  (bram_we[3] ? bram_waddr : bram_raddr),
+    .dina   (bram_wdata),
+    .douta  (bram_dout[3])
+);
+
+reg [1:0] buf_sel;
 
 always @(posedge clk or negedge rst_n) begin
-    if(~rst_n)begin
-        for (j = 0; j < 9; j = j + 1) begin
-            window_out_ff[j] <= 8'b0;
-        end
-    end
-    else if(window_out_valid_ff)begin
-        if (col == 6'b0) begin
-            window_out_ff[0] <= 8'b0;
-            window_out_ff[1] <= cov_buffer0[1];
-            window_out_ff[2] <= cov_buffer0[2];
-            window_out_ff[3] <= 8'b0;
-            window_out_ff[4] <= cov_buffer1[1];
-            window_out_ff[5] <= cov_buffer1[2];
-            window_out_ff[6] <= 8'b0;
-            window_out_ff[7] <= cov_buffer2[1];
-            window_out_ff[8] <= cov_buffer2[2];
-        end
-        else if (col == 6'd49) begin
-            window_out_ff[0] <= window_out_ff[1];
-            window_out_ff[1] <= window_out_ff[2];
-            window_out_ff[2] <= 8'b0;
-            window_out_ff[3] <= window_out_ff[4];
-            window_out_ff[4] <= window_out_ff[5];
-            window_out_ff[5] <= 8'b0;
-            window_out_ff[6] <= window_out_ff[7];
-            window_out_ff[7] <= window_out_ff[8];
-            window_out_ff[8] <= 8'b0;
-        end
-        else begin
-            window_out_ff[0] <= window_out_ff[1];
-            window_out_ff[1] <= window_out_ff[2];
-            window_out_ff[2] <= cov_buffer0[2];
-            window_out_ff[3] <= window_out_ff[4];
-            window_out_ff[4] <= window_out_ff[5];
-            window_out_ff[5] <= cov_buffer1[2];
-            window_out_ff[6] <= window_out_ff[7];
-            window_out_ff[7] <= window_out_ff[8];
-            window_out_ff[8] <= cov_buffer2[2];
-        end
-    end
-    else begin
-        for (j = 0; j < 9; j = j + 1) begin
-            window_out_ff[j] <= 8'b0;
-        end
-    end
-end
-
-assign window_out =  {window_out_ff[8],window_out_ff[7],window_out_ff[6],
-                      window_out_ff[5],window_out_ff[4],window_out_ff[3],
-                      window_out_ff[2],window_out_ff[1],window_out_ff[0]};
-
-reg [3:0] cur_state;
-reg [3:0] next_state;
-localparam IDLE     = 4'b0000;
-localparam INIT     = 4'b0010;
-localparam COV      = 4'b0100;
-localparam LAST_COV = 4'b1000;
-
-always @(posedge clk or negedge rst_n) begin
-    if(~rst_n)begin
-        cur_state <= IDLE;
-    end
-    else begin
-        cur_state <= next_state;
+    if (~rst_n) begin
+        buf_sel <= 2'd1;
+    end else if (din_valid && window_en && col == 6'd49) begin
+        buf_sel <= buf_sel + 2'd1;
     end
 end
 
 always @(*) begin
-    case (cur_state)
-        IDLE:begin
-           next_state = window_en ? INIT : IDLE; 
+    bram_waddr = col;
+    bram_wdata = din_select;
+    case (buf_sel)
+        2'b00:begin
+            bram_we[0] = 1'b1;
+            bram_we[1] = 1'b0;
+            bram_we[2] = 1'b0;
+            bram_we[3] = 1'b0;
         end
-        INIT:begin
-            if (col == 6'd49 && row == 6'd1) begin
-                next_state = COV;
-            end
-            else next_state = INIT;
+        2'b01:begin
+            bram_we[0] = 1'b0;
+            bram_we[1] = 1'b1;
+            bram_we[2] = 1'b0;
+            bram_we[3] = 1'b0;
         end
-        COV:begin
-            if (col == 6'd49 && row == 6'd59) begin
-                next_state = LAST_COV;
-            end
-            else next_state = COV;
+        2'b10:begin
+            bram_we[0] = 1'b0;
+            bram_we[1] = 1'b0;
+            bram_we[2] = 1'b1;
+            bram_we[3] = 1'b0;
         end
-        LAST_COV:begin
-            if (col == 6'd49 && row == 6'd61) begin
-                next_state = IDLE;
-            end
-            else next_state = LAST_COV;
+        2'b11:begin
+            bram_we[0] = 1'b0;
+            bram_we[1] = 1'b0;
+            bram_we[2] = 1'b0;
+            bram_we[3] = 1'b1;
         end
-        default:begin
-            next_state = IDLE;
-        end 
+        default: begin
+            bram_we[0] = 1'b0;
+            bram_we[1] = 1'b0;
+            bram_we[2] = 1'b0;
+            bram_we[3] = 1'b0;
+        end
     endcase
 end
 
+reg [DIN_WIDTH-1:0] head [0:7];
 integer i;
-
 always @(posedge clk or negedge rst_n) begin
-    if(~rst_n)begin
-        for (i = 0; i < 52; i = i + 1) begin
-            cov_buffer0[i] <= 8'b0; 
-            cov_buffer1[i] <= 8'b0; 
-            cov_buffer2[i] <= 8'b0; 
-            cov_buffer3[i] <= 8'b0; 
+    if (~rst_n) begin
+        for (i = 0;i < 8;i = i + 1) begin
+            head[i] <= 8'b0;
+        end
+    end
+    else if (din_valid && window_en) begin
+        if (col == 6'd0)begin
+            head[{buf_sel, 1'b0}] <= din_select;
+        end
+        else if (col == 6'd1)begin
+            head[{buf_sel, 1'b1}] <= din_select;
         end
     end
     else begin
-        case (cur_state)
-            IDLE:begin
-                for (i = 0; i < 52; i = i + 1) begin
-                    cov_buffer0[i] <= 8'b0; 
-                    cov_buffer1[i] <= 8'b0; 
-                    cov_buffer2[i] <= 8'b0; 
-                    cov_buffer3[i] <= 8'b0; 
-                end
-            end
-            INIT:begin
-                for (i = 0; i < 52; i = i + 1) begin
-                    cov_buffer0[i] <= 8'b0;  
-                end
-                cov_buffer1[0]  <= 8'b0;
-                cov_buffer1[51] <= 8'b0;
-                cov_buffer2[0]  <= 8'b0;
-                cov_buffer2[51] <= 8'b0;
-                cov_buffer3[0]  <= 8'b0;
-                cov_buffer3[51] <= 8'b0;
-                if(din_valid)begin
-                    if (row[0] == 1'b0) begin
-                        for (i = 2; i < 51 ; i = i + 1) begin
-                            cov_buffer1[i-1] <= cov_buffer1[i];
-                        end
-                        cov_buffer1[50] <= din_select;
-                    end
-                    else if (row[0] == 1'b1) begin
-                        for (i = 2; i < 51 ; i = i + 1) begin
-                            cov_buffer2[i-1] <= cov_buffer2[i];
-                        end
-                        cov_buffer2[50] <= din_select;
-                    end
-                end
-            end 
-            COV:begin
-                if(col == 6'd49)begin
-                    for (i = 2; i < 51 ; i = i + 1) begin
-                        cov_buffer0[i-1] <= cov_buffer1[i];
-                        cov_buffer1[i-1] <= cov_buffer2[i];
-                        cov_buffer2[i-1] <= cov_buffer3[i];
-                    end
-                    cov_buffer0[50] <= cov_buffer1[1];
-                    cov_buffer1[50] <= cov_buffer2[1];
-                    cov_buffer2[50] <= din_select;
+        for (i = 0;i < 8;i = i + 1) begin
+            head[i] <= 8'b0;
+        end
+    end
+end
 
-                    cov_buffer0[0]  <= 8'b0;
-                    cov_buffer0[51] <= 8'b0;
-                    cov_buffer1[0]  <= 8'b0;
-                    cov_buffer1[51] <= 8'b0;
-                    cov_buffer2[0]  <= 8'b0;
-                    cov_buffer2[51] <= 8'b0;
-                    cov_buffer3[0]  <= 8'b0;
-                    cov_buffer3[51] <= 8'b0;
-                end
-                else begin
-                    for (i = 2; i < 52 ; i = i + 1) begin
-                        cov_buffer0[i-1] <= cov_buffer0[i];
-                        cov_buffer1[i-1] <= cov_buffer1[i];
-                        cov_buffer2[i-1] <= cov_buffer2[i];
-                        cov_buffer3[i-1] <= cov_buffer3[i];
-                    end
-                    cov_buffer0[50] <= cov_buffer0[1];
-                    cov_buffer1[50] <= cov_buffer1[1];
-                    cov_buffer2[50] <= cov_buffer2[1];
-                    cov_buffer3[50] <= din_select;
-                end
-            end
-            LAST_COV:begin
-                for (i = 2; i < 51 ; i = i + 1) begin
-                    cov_buffer0[i-1] <= cov_buffer0[i];
-                    cov_buffer1[i-1] <= cov_buffer1[i];
-                    cov_buffer2[i-1] <= 8'b0;
-                end
-            end
-            default: begin
-                for (i = 0; i < 52; i = i + 1) begin
-                    cov_buffer0[i] <= 8'b0; 
-                    cov_buffer1[i] <= 8'b0; 
-                    cov_buffer2[i] <= 8'b0; 
-                    cov_buffer3[i] <= 8'b0; 
-                end
-            end
-        endcase
+wire [1:0] bidx_top = buf_sel - 2'd3;
+wire [1:0] bidx_mid = buf_sel - 2'd2;
+wire [1:0] bidx_bot = buf_sel - 2'd1;
+
+always @(*) begin
+    bram_raddr = col + 2'd2;
+end
+
+wire [DIN_WIDTH-1:0] rd_top = bram_dout[bidx_top];
+wire [DIN_WIDTH-1:0] rd_mid = bram_dout[bidx_mid];
+wire [DIN_WIDTH-1:0] rd_bot = bram_dout[bidx_bot];
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+        win[0]<=8'd0; win[1]<=8'd0; win[2]<=8'd0;
+        win[3]<=8'd0; win[4]<=8'd0; win[5]<=8'd0;
+        win[6]<=8'd0; win[7]<=8'd0; win[8]<=8'd0;
+    end
+    else if(col == 6'd0)begin
+        win[0] <= 8'd0;
+        win[1] <= head[{bidx_top, 1'b0}];
+        win[2] <= head[{bidx_top, 1'b1}];
+        win[3] <= 8'd0;
+        win[4] <= head[{bidx_mid, 1'b0}];
+        win[5] <= head[{bidx_mid, 1'b1}];
+        win[6] <= 8'd0;
+        win[7] <= row == 6'd61 ? 8'd0 : head[{bidx_bot, 1'b0}];
+        win[8] <= row == 6'd61 ? 8'd0 : head[{bidx_bot, 1'b1}];
+    end 
+    else begin
+        win[0] <= win[1];
+        win[1] <= win[2];
+        win[2] <= (col == 6'd49 || row == 6'd1) ? 8'd0 : rd_top;
+        // 中行
+        win[3] <= win[4];
+        win[4] <= win[5];
+        win[5] <= (col == 6'd49) ? 8'd0 : rd_mid;
+        // 下行
+        win[6] <= win[7];
+        win[7] <= win[8];
+        win[8] <= (col == 6'd49|| row == 6'd61) ? 8'd0 : rd_bot;
     end
 end
 
@@ -255,15 +216,6 @@ always @(posedge clk or negedge rst_n) begin
     end
     else if (col == 6'd49 && row == 6'd61) begin
         window_out_valid_ff <= 1'b0;
-    end
-end
-
-always @(posedge clk or negedge rst_n) begin
-    if(~rst_n)begin
-        window_out_valid <= 1'b0;
-    end
-    else begin
-        window_out_valid <= window_out_valid_ff;
     end
 end
 

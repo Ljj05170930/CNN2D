@@ -1,8 +1,9 @@
 CNN2D.cache/
 CNN2D.hw/
-CNN2D.ip_user_file/
+CNN2D.ip_user_files/
 CNN2D.runs/
 CNN2D.sim/
+CNN2D.srcs/sources_1/ip
 *.xpr
 Inference_251021/
 *.txt
