@@ -1,9 +1,10 @@
 `timescale 1ns / 1ps
-module tb_WINDOW_50();
+module tb_CNN2D;
 localparam CLK_PERIOD = 100;          
 localparam DIN_WIDTH  = 8;
 localparam DOUT_WIDTH = 8;
 localparam NUM        = 9;
+localparam MAX_WIDTH  = 6;
 
 localparam IMAGE_WIDTH  = 50;
 localparam IMAGE_HEIGHT = 62;
@@ -14,25 +15,29 @@ reg                             clk;
 reg                             rst_n;
 reg  [DIN_WIDTH-1:0]            din_select;
 reg                             din_valid;
-reg                             window_en;
-wire                            window_out_valid;
-wire [DOUT_WIDTH*NUM-1:0]       window_out;
+reg                             cnn_start;
 
 reg [DIN_WIDTH-1:0]             data_ram [0:TOTAL_PIXELS-1];
 
-WINDOW_50 #(
-    .DIN_WIDTH (DIN_WIDTH),
-    .DOUT_WIDTH(DOUT_WIDTH),
-    .NUM       (NUM)
-) dut (
-    .clk            (clk),
-    .rst_n          (rst_n),
-    .din_select     (din_select),
-    .din_valid      (din_valid),
-    .window_en      (window_en),
-    .window_out_valid(window_out_valid),
-    .window_out     (window_out)
+CNN2D u_CNN2D(
+    .clk        (clk        ),
+    .rst_n      (rst_n      ),
+    .cnn_start  (cnn_start  ),
+    .din        (din_select ),
+    .din_valid  (din_valid  ),
+    .dout(),
+    .dout_valid()
 );
+
+localparam IDLE   = 9'b000000001;
+localparam LAYER0 = 9'b000000010;
+localparam LAYER1 = 9'b000000100;
+localparam LAYER2 = 9'b000001000;
+localparam LAYER3 = 9'b000010000;
+localparam LAYER4 = 9'b000100000;
+localparam LAYER5 = 9'b001000000;
+localparam LAYER6 = 9'b010000000;
+localparam LAYER7 = 9'b100000000;
 
 always #(CLK_PERIOD/2) clk = ~clk;
 
@@ -77,6 +82,8 @@ initial begin
         x1 = $fscanf(DATA_STORE, "%d", data_ram[i]);
     end
     $fclose(DATA_STORE);
+
+
 end
 
 initial begin
@@ -84,24 +91,21 @@ initial begin
 
     din_select = 0;
     din_valid  = 0;
-    window_en  = 0;
-
+    cnn_start  = 0;
     wait (rst_n == 1);
     #(CLK_PERIOD * 2);
 
-    window_en = 1;
+    cnn_start = 1;
     addr = 0;
     #200
     while (addr < PIXELS) begin
         @(posedge clk);
+        #50
         din_valid <= 1;
         din_select <= data_ram[addr];
         addr <= addr + 1;
     end
-
-    @(posedge clk);
-        din_valid <= 0;
-        window_en <= 0;
+    din_valid <= 0;
 
 end
 
