@@ -49,6 +49,7 @@ localparam LAYER7 = 9'b100000000;
 
 wire [8:0] top_state;
 wire state_switch;
+wire [5:0] cov1D_ram_addr;
 // =============================================================================
 // Weight_Rom
 // =============================================================================
@@ -201,7 +202,6 @@ conv_layer #(
     // Control
     .conv_mode        (conv_mode        ),
     .conv_in_valid    (conv_in_valid    ),
- 
     // 2D convolution results per channel
     .conv_2D_dout0    (conv_2D_dout0    ),
     .conv_2D_dout1    (conv_2D_dout1    ),
@@ -421,6 +421,7 @@ CTRL#(
     .conv_end           (conv_end           ),
     .maxpool_valid_rise (maxpool_valid_rise ),
     .maxpool_flag       (maxpool_flag       ),
+    .cov1D_ram_addr     (cov1D_ram_addr     ),
     .top_state          (top_state          ),
     .state_switch       (state_switch       ),
     .img_width          (img_width          ),
@@ -436,6 +437,46 @@ CTRL#(
     .pool_en            (pool_en            ),
     .conv_mode          (conv_mode          )
 );
+
+wire [DOUT_WIDTH-1:0]        avg_pool_din0;
+wire [DOUT_WIDTH-1:0]       avg_pool_din1;
+wire                        avg_din_valid;
+wire [DOUT_WIDTH*2-1:0]     avg_pool_cov1D_dout;
+wire                        avg_dout_cov1D_valid;
+wire [DOUT_WIDTH-1:0]       avg_pool_dout;
+wire                        avg_dout_valid;
+wire [DIN_WIDTH*8-1:0]      ram_out;
+
+assign avg_pool_din0 = top_state == LAYER3 ?  maxpool_dout0 : scale_dout[DOUT_WIDTH-1:0];
+assign avg_pool_din1 = top_state == LAYER3 ?  8'b0          : scale_dout[DOUT_WIDTH*2-1:DOUT_WIDTH];
+assign avg_din_valid = (top_state == LAYER3 && maxpool_flag) || (maxpool_in_valid && top_state == LAYER5);
+
+avg_pool#(
+   .DIN_WIDTH (DIN_WIDTH),
+   .DOUT_WIDTH(DOUT_WIDTH) 
+)u_avg_pool(
+    .clk                  (clk            ),
+    .rst_n                (rst_n          ),
+    .top_state            (top_state      ),
+    .avg_pool_din0        (avg_pool_din0  ),
+    .avg_pool_din1        (avg_pool_din1  ),
+    .avg_din_valid        (avg_din_valid  ),
+    .avg_pool_dout        (avg_pool_dout  ),
+    .avg_pool_cov1D_dout  (avg_pool_cov1D_dout ),
+    .avg_dout_cov1D_valid (avg_dout_cov1D_valid ),
+    .avg_dout_valid       (avg_dout_valid )
+);
+
+CONV1D_RAM_CTRL u_CONV1D_RAM_CTRL(
+    .clk            (clk            ),
+    .rst_n          (rst_n          ),
+    .top_state      (top_state      ),
+    .avg_dout_valid (avg_dout_valid ),
+    .avg_pool_dout  (avg_pool_dout  ),
+    .cov1D_ram_addr (cov1D_ram_addr ),
+    .ram_out        (ram_out        )
+);
+
 
 
 (* dont_touch = "true" *)
@@ -518,15 +559,6 @@ PINGPONG_RAM u_PINGPONG_RAM7(
     .douta (ram_dout[7] )
 );
 
-// (* dont_touch = "true" *)
-// CONV1D_RAM u_CONV1D_RAM(
-//     .clka  (clk  ),
-//     .ena   (ena   ),
-//     .wea   (wea   ),
-//     .addra (addra ),
-//     .dina  (dina  ),
-//     .douta (douta )
-// );
 
 
 endmodule

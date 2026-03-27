@@ -21,7 +21,6 @@ module conv_layer #(
 
     input  wire                                   conv_mode,
     input  wire                                   conv_in_valid,
-
     // 2D conv results per channel
     output wire signed [DOUT_WIDTH_2D-1:0]        conv_2D_dout0,
     output wire signed [DOUT_WIDTH_2D-1:0]        conv_2D_dout1,

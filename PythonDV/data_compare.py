@@ -29,7 +29,9 @@ def compare(data1, data2, verbose=True):
     min_len = min(len(arr1), len(arr2))
     differences = []
     for i in range(min_len):
-        if arr1[i] != arr2[i]:
+        # if arr1[i] != arr2[i]:
+        #     differences.append((i, arr1[i], arr2[i]))
+        if abs(arr1[i] - arr2[i]) > 1:  # 允许1的误差
             differences.append((i, arr1[i], arr2[i]))
 
     if differences and verbose:

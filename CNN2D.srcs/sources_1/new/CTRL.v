@@ -14,6 +14,7 @@ module CTRL#(
     input wire                      conv_end,                                     
     input wire                      maxpool_valid_rise,
     input wire                      maxpool_flag,
+    input wire [5:0]                cov1D_ram_addr, 
 
     output [8:0]                    top_state,
     output wire                     state_switch,
@@ -83,7 +84,11 @@ always @(*) begin
         LAYER0: next_state = layer0_ready ? LAYER1 : LAYER0;
         LAYER1: next_state = layer1_ready ? LAYER2 : LAYER1;
         LAYER2: next_state = layer2_ready ? LAYER3 : LAYER2;
-        LAYER3: next_state = layer3_ready ? LAYER4 : LAYER3;
+        LAYER3: begin
+            if(layer3_ready && cov1D_ram_addr == 6'd63) 
+                next_state = LAYER4;
+            else next_state = layer3_ready ? IDLE : LAYER3;
+        end
         LAYER4:;
         default: next_state = IDLE;
     endcase
@@ -93,8 +98,18 @@ always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
         W_addr <= 6'b0;
     end
-    else if(maxpool_valid_rise) begin
-        W_addr <= W_addr + 1'b1;
+    else begin
+        case (current_state)
+            IDLE:begin
+                W_addr <= 6'b0;
+            end 
+            LAYER0,LAYER1,LAYER2,LAYER3:begin
+                if(maxpool_valid_rise && !shift_en) begin
+                    W_addr <= W_addr + 1'b1;
+                end 
+            end
+            default: W_addr <= 6'b0;
+        endcase
     end
 end
 

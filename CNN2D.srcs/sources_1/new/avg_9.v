@@ -66,6 +66,7 @@ always @(posedge clk or negedge rst_n) begin
     else if (avg_dout_valid_ff) begin
         // Approximate division by 9 using shifts with rounding
         avg_pool_dout <= ((avg_pool_dout_ff + 8) >> 4) + ((avg_pool_dout_ff + 16) >> 5) + ((avg_pool_dout_ff + 32) >> 6);
+        // avg_pool_dout <= (avg_pool_dout_ff >> 4) + (avg_pool_dout_ff >> 5) + (avg_pool_dout_ff >> 6);
         avg_pool_dout_ff <= 12'b0;   // clear accumulator for next window
     end
     else if(avg_din_valid && en)begin

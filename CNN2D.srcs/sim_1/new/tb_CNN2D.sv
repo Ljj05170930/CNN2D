@@ -155,8 +155,8 @@ dump_if_dec #(.WIDTH(8))
 u_dump_layer3_out (
     .clk  (clk),
     .fd   (layer_3_out),
-    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER3),
-    .data (u_CNN2D.maxpool_dout0)
+    .cond(u_CNN2D.avg_dout_valid),
+    .data (u_CNN2D.avg_pool_dout)
 );
 
 dump_if_dec #(.WIDTH(20)) 
@@ -170,7 +170,7 @@ u_dump_layer3_mid (
 
 initial begin
     integer addr;
-
+    integer i;
     din_select = 0;
     din_valid  = 0;
     cnn_start  = 0;
@@ -179,16 +179,22 @@ initial begin
 
     cnn_start = 1;
     addr = 0;
+    i = 0;
     #200
-    while (addr < PIXELS) begin
-        @(posedge clk);
-        #5
-        din_valid <= 1;
-        din_select <= data_ram[addr];
-        addr <= addr + 1;
+    repeat(16) begin
+        while (addr < PIXELS) begin
+            @(posedge clk);
+            #5
+            din_valid <= 1;
+            din_select <= data_ram[addr+i*3100];
+            addr <= addr + 1;
+        end
+        din_select  <= 0;
+        din_valid <= 0;
+        i <= i + 1;
+        addr <= 0;
+        #120000;
     end
-    din_valid <= 0;
-
 end
 
 

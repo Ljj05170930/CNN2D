@@ -15,7 +15,7 @@ module avg_pool#(
 (
     input wire                    clk,
     input wire                    rst_n,
-    input wire [3:0]              top_state,        // One-hot layer selector from top FSM
+    input wire [8:0]              top_state,        // One-hot layer selector from top FSM
 
     input wire [DIN_WIDTH-1:0]    avg_pool_din0,    // Pixel stream for channel 0
     input wire [DIN_WIDTH-1:0]    avg_pool_din1,    // Pixel stream for channel 1
