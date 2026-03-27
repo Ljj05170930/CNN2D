@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 module tb_CNN2D;
-localparam CLK_PERIOD = 100;          
+localparam CLK_PERIOD = 10;          
 localparam DIN_WIDTH  = 8;
 localparam DOUT_WIDTH = 8;
 localparam NUM        = 9;
@@ -82,9 +82,91 @@ initial begin
         x1 = $fscanf(DATA_STORE, "%d", data_ram[i]);
     end
     $fclose(DATA_STORE);
-
-
 end
+
+integer layer_0_mid;
+integer layer_0_out;
+integer layer_1_out;
+integer layer_2_out;
+integer layer_3_out;
+integer layer_3_mid;
+initial begin
+    open_file_w(
+        .fd(layer_0_mid),
+        .filepath("../../../../DUT/layer_0_mid.txt")
+    );
+    open_file_w(
+        .fd(layer_0_out),
+        .filepath("../../../../DUT/layer_0_out.txt")
+    );
+    open_file_w(
+        .fd(layer_1_out),
+        .filepath("../../../../DUT/layer_1_out.txt")
+    );
+    open_file_w(
+        .fd(layer_2_out),
+        .filepath("../../../../DUT/layer_2_out.txt")
+    );
+    open_file_w(
+        .fd(layer_3_out),
+        .filepath("../../../../DUT/layer_3_out.txt")
+    );
+    open_file_w(
+        .fd(layer_3_mid),
+        .filepath("../../../../DUT/layer_3_mid.txt")
+    );
+end
+
+dump_if_dec #(.WIDTH(20)) 
+u_dump_layer0_mid (
+    .clk  (clk),
+    .fd   (layer_0_mid),
+    .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER0),
+    .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
+);
+
+dump_array_if #(
+    .POOL_WIDTH(8),
+    .PE_NUM    (4)
+) u_dump_layer_0_out (
+    .clk (clk),
+    .fd  (layer_0_out),
+    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER0),
+    .data(u_CNN2D.maxpool_dout_all)
+);
+
+dump_if_dec #(.WIDTH(8)) 
+u_dump_layer1_mid (
+    .clk  (clk),
+    .fd   (layer_1_out),
+    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER1),
+    .data (u_CNN2D.maxpool_dout0)
+);
+
+dump_if_dec #(.WIDTH(8)) 
+u_dump_layer2_out (
+    .clk  (clk),
+    .fd   (layer_2_out),
+    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER2),
+    .data (u_CNN2D.maxpool_dout0)
+);
+
+dump_if_dec #(.WIDTH(8)) 
+u_dump_layer3_out (
+    .clk  (clk),
+    .fd   (layer_3_out),
+    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER3),
+    .data (u_CNN2D.maxpool_dout0)
+);
+
+dump_if_dec #(.WIDTH(20)) 
+u_dump_layer3_mid (
+    .clk  (clk),
+    .fd   (layer_3_mid),
+    .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER3),
+    .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
+);
+
 
 initial begin
     integer addr;
@@ -100,7 +182,7 @@ initial begin
     #200
     while (addr < PIXELS) begin
         @(posedge clk);
-        #50
+        #5
         din_valid <= 1;
         din_select <= data_ram[addr];
         addr <= addr + 1;
@@ -123,7 +205,7 @@ module dump_if_dec #(
 );
     always @(posedge clk) begin
         if (cond) begin
-            $fdisplay(fd, "%d", data);
+            $fdisplay(fd, "%0d", data);
             $fflush(fd);
         end
     end
@@ -140,10 +222,18 @@ module dump_array_if #(
 );
     integer i;
 
+    // always @(posedge clk) begin
+    //     if (cond) begin
+    //         for (i = 0; i < PE_NUM; i = i + 1) begin
+    //             $fdisplay(fd, "%0d", $signed(data[i]));
+    //         end
+    //         $fflush(fd);
+    //     end
+    // end
     always @(posedge clk) begin
         if (cond) begin
             for (i = 0; i < PE_NUM; i = i + 1) begin
-                $fdisplay(fd, "%0d", $signed(data[i]));
+                $fdisplay(fd, "%0d", (data[i]));
             end
             $fflush(fd);
         end

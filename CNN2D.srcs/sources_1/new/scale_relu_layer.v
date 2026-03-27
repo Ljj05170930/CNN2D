@@ -48,12 +48,12 @@ always @(posedge clk or negedge rst_n) begin
             end 
             LAYER0:begin
                 if (shift_en) begin
-                    for (j = 0; j < 3; j = j + 1) begin
-                        bias_reg[j+1]  <= bias_reg[j];
-                        scale_reg[j+1] <= scale_reg[j];
+                    for (j = 1; j < 4; j = j + 1) begin
+                        bias_reg[j-1]  <= bias_reg[j];
+                        scale_reg[j-1] <= scale_reg[j];
                     end
-                    bias_reg[0]  <= bias;
-                    scale_reg[0] <= scale;
+                    bias_reg[3]  <= bias;
+                    scale_reg[3] <= scale;
                 end
             end
             LAYER1,LAYER2,LAYER3,LAYER7:begin
@@ -84,7 +84,7 @@ generate
             .scale (scale_reg [i]  ),
             .bias  (bias_reg  [i]  ),
             .din   (scale_din [i*SCALE_IN_WIDTH+:SCALE_IN_WIDTH]),
-            .dout  (scale_dout[i*SCALE_WIDTH+:SCALE_WIDTH])
+            .dout  (scale_dout[i*DOUT_WIDTH+:DOUT_WIDTH])
         );
     end
 endgenerate

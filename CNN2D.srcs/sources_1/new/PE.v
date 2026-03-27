@@ -92,19 +92,28 @@ always @(posedge clk or negedge rst_n) begin
         add_dout0   <= 14'b0;
         add_dout1   <= 14'b0;
         add_dout2   <= 14'b0;
-        conv2D_dout <= 16'b0;
+        // conv2D_dout <= 16'b0;
     end else if (conv_in_valid) begin
         // Stage 1: row partial sums
         add_dout0  <= mul_out[0] + mul_out[1] + mul_out[2];
         add_dout1  <= mul_out[3] + mul_out[4] + mul_out[5];
         add_dout2  <= mul_out[6] + mul_out[7] + mul_out[8];
         // Stage 2: column accumulation of previous cycle's row sums
-        conv2D_dout <= add_dout0 + add_dout1 + add_dout2;
+        // conv2D_dout <= add_dout0 + add_dout1 + add_dout2;
     end else begin
         add_dout0   <= 14'b0;
         add_dout1   <= 14'b0;
         add_dout2   <= 14'b0;
+        // conv2D_dout <= 16'b0;
+    end
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
         conv2D_dout <= 16'b0;
+    end
+    else begin
+        conv2D_dout <= add_dout0 + add_dout1 + add_dout2;
     end
 end
 

@@ -35,6 +35,11 @@ BIAS_TXT_FILES = [
     "data/layer_1_bias.txt",    # 8  filters
     "data/layer_2_bias.txt",    # 16 filters
     "data/layer_3_bias.txt",    # 16 filters
+    "data/layer_4_bias.txt",    # 32 filters
+    "data/layer_5_bias.txt",    # 32 filters
+    "data/layer_6_bias.txt",    # 32 filters
+    "data/layer_7_bias.txt",    # 1 filters
+
 ]
 
 SCALE_TXT_FILES = [
@@ -42,10 +47,15 @@ SCALE_TXT_FILES = [
     "data/layer_1_scale_parameters.txt",   # 8  filters
     "data/layer_2_scale_parameters.txt",   # 16 filters
     "data/layer_3_scale_parameters.txt",   # 16 filters
+    "data/layer_4_scale_parameters.txt",   # 32 filters
+    "data/layer_5_scale_parameters.txt",   # 32 filters
+    "data/layer_6_scale_parameters.txt",   # 32 filters
+    "data/layer_7_scale_parameters.txt",   # 1 filters
 ]
 
+
 # Expected filter count per layer — used to validate txt line counts
-FILTER_COUNTS = [4, 8, 16, 32]
+FILTER_COUNTS = [4, 8, 16, 32,32,32,32,1]
 OUTPUT_BIAS_COE  = "bias_all.coe"
 OUTPUT_SCALE_COE = "scale_all.coe"
 

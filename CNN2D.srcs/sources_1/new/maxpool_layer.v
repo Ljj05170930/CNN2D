@@ -83,6 +83,6 @@ assign maxpool_dout2 = dout_ch[2];
 assign maxpool_dout3 = dout_ch[3];
 
 // Global flag
-assign maxpool_flag = &flag_ch;
+assign maxpool_flag = flag_ch[0];
 
 endmodule

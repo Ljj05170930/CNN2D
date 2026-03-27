@@ -36,6 +36,6 @@ assign dout_reg = dout_ff[SCALE_IN_WIDTH-1] ? 20'b0 : dout_ff;
 // =============================================================================
 // Arithmetic right-shift  –  quantise to DOUT_WIDTH bits
 // =============================================================================
-assign dout = (dout_reg >>> scale);
+assign dout = (dout_reg ) >>> scale;
 
 endmodule

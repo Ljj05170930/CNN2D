@@ -26,12 +26,15 @@ module DATA_SELECT#(
     input wire                  din_valid,
     input wire  [MAX_WIDTH-1:0] img_width,
     input wire  [MAX_WIDTH-1:0] img_height,
+    input wire                  state_switch,
 
     output wire [DOUT_WIDTH*NUM-1:0]        select_dout0,
     output wire [DOUT_WIDTH*NUM-1:0]        select_dout1,
     output wire [DOUT_WIDTH*NUM-1:0]        select_dout2,
     output wire [DOUT_WIDTH*NUM-1:0]        select_dout3,
 
+    output wire                             conv_rs_end,
+    output wire                             conv_end,
     output reg                              data_select_valid
 );
 
@@ -58,8 +61,8 @@ reg conv_start;
 
 wire col_last    = (col == img_width - 1'b1);
 wire row_last    = (row == img_height - 1'b1);
-wire conv_rs_end = col_last && row_last;          // Input frame complete
-wire conv_end    = (col_select == img_width - 1'b1) && (row_select == img_height - 1'b1);  // Output frame complete
+assign conv_rs_end = col_last && row_last;          // Input frame complete
+assign conv_end  = (col_select == img_width - 1'b1) && (row_select == img_height - 1'b1);  // Output frame complete
 
 wire sw_line  = din_valid && col_last;            // End-of-row strobe
 
@@ -82,13 +85,22 @@ always @(*) begin
     case (cur_state)
         IDLE:next_state = cnn_start ? PRE : IDLE;
         PRE:begin
-            next_state  = conv_start ? CONV : PRE;
+            if (state_switch) begin
+                next_state = IDLE;
+            end
+            else next_state  = conv_start ? CONV : PRE;
         end 
         CONV:begin
-            next_state = conv_rs_end ? LAST_CONV : CONV;
+            if (state_switch) begin
+                next_state = IDLE;
+            end
+            else next_state = conv_rs_end ? LAST_CONV : CONV;
         end
         LAST_CONV:begin
-            next_state = conv_end ? IDLE : LAST_CONV;
+            if (state_switch) begin
+                next_state = IDLE;
+            end
+            else next_state = conv_end ? IDLE : LAST_CONV;
         end
         default:next_state  = IDLE; 
     endcase
@@ -135,6 +147,9 @@ always @(posedge clk or negedge rst_n) begin
     if (~rst_n)begin
         conv_start <= 1'b0;
     end
+    else if(state_switch)begin
+        conv_start <= 1'b0;
+    end
     else if (col == 6'd0 && row == 6'd1)begin
         conv_start <= 1'b1;
     end
@@ -152,7 +167,7 @@ always@(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
         col_select <= 6'b0;
         row_select <= 6'b0;
-    end else if (conv_start && (din_valid || cur_state == LAST_CONV)) begin
+    end else if (conv_start && (din_valid || (cur_state == LAST_CONV))) begin
         if (col_select == img_width - 1'b1) begin
             if (row_select == img_height - 1'b1)begin
                 row_select <= 6'b0;
