@@ -49,12 +49,14 @@ localparam LAYER7 = 9'b100000000;
 
 wire [8:0] top_state;
 wire state_switch;
-wire [5:0] cov1D_ram_addr;
+wire [6:0] conv1D_ram_addr0;
+wire [6:0] conv1D_ram_addr1;
 // =============================================================================
 // Weight_Rom
 // =============================================================================
-wire [5:0]   W_addr;
+wire [6:0]   W_addr;
 wire [143:0] W_dout;
+
 (* dont_touch = "true" *)
 Weight_Rom u_Weight_Rom(
     .clka  (clk      ),
@@ -64,31 +66,21 @@ Weight_Rom u_Weight_Rom(
 );
 
 // =============================================================================
-// Bias_Rom
+// BN_Rom
 // =============================================================================
-wire [7:0]   B_addr;
-wire [BIAS_WIDTH-1:0] B_dout;
-(* dont_touch = "true" *)
-Bias_Rom u_Bias_Rom(
+wire [7:0]   BN_addr;
+wire [BIAS_WIDTH + SCALE_WIDTH-1:0] BN_dout;
+wire [BIAS_WIDTH-1:0]  bias;
+wire [SCALE_WIDTH-1:0] scale;
+BN_Rom u_BN_Rom(
     .clka  (clk      ),
     .ena   (cnn_start),
-    .addra (B_addr   ),
-    .douta (B_dout   )
+    .addra (BN_addr  ),
+    .douta (BN_dout   )
 );
 
-// =============================================================================
-// Scale_Rom
-// =============================================================================
-wire [7:0]   S_addr;
-wire [SCALE_WIDTH-1:0] S_dout;
-(* dont_touch = "true" *)
-Scale_Rom u_Scale_Rom(
-    .clka  (clk      ),
-    .ena   (cnn_start),
-    .addra (S_addr   ),
-    .douta (S_dout   )
-);
-
+assign bias  = BN_dout[BIAS_WIDTH-1:0];
+assign scale = BN_dout[BIAS_WIDTH + SCALE_WIDTH-1:BIAS_WIDTH]; 
 // =============================================================================
 // DATA_SELECT
 //   Buffers three consecutive input rows in circular line buffers and assembles
@@ -160,13 +152,13 @@ wire [DIN_WIDTH*NUM-1:0]              conv_din0;        // channel 0 pixel windo
 wire [DIN_WIDTH*NUM-1:0]              conv_din1;        // channel 1 pixel window
 wire [DIN_WIDTH*NUM-1:0]              conv_din2;        // channel 2 pixel window
 wire [DIN_WIDTH*NUM-1:0]              conv_din3;        // channel 3 pixel window
- 
+
 // Weight bus from BRAM: all 4 channels packed, one filter's worth per cycle
  
 // Control signals from internal sequencer
 wire                                  conv_mode;        // clears PE accumulators
-wire                                  conv_in_valid;    // pixel window is valid
- 
+reg                                   conv_in_valid;    // pixel window is valid
+
 // conv_layer outputs
 wire signed [DOUT_WIDTH_2D-1:0]       conv_2D_dout0;
 wire signed [DOUT_WIDTH_2D-1:0]       conv_2D_dout1;
@@ -175,8 +167,24 @@ wire signed [DOUT_WIDTH_2D-1:0]       conv_2D_dout3;
 wire signed [DOUT_WIDTH_1D*3*4-1:0]   conv1D_dout;
 wire                                  conv_out1D_valid;
 wire                                  conv_out2D_valid;
+wire                                  conv1D_dout_valid;
 
-assign conv_in_valid = data_select_valid;
+always @(*) begin
+    conv_in_valid = 1'b0;
+    begin
+        case (top_state)
+            LAYER0: conv_in_valid = data_select_valid;
+            LAYER1: conv_in_valid = data_select_valid;
+            LAYER2: conv_in_valid = data_select_valid;
+            LAYER3: conv_in_valid = data_select_valid;
+            LAYER4: conv_in_valid = conv1D_dout_valid;
+            LAYER5: conv_in_valid = conv1D_dout_valid;
+            default: begin
+                conv_in_valid = 1'b0;
+            end
+        endcase
+    end
+end
 
 (* dont_touch = "true" *)
 conv_layer #(
@@ -233,8 +241,8 @@ scale_relu_layer#(
     .rst_n      (rst_n      ),
     .top_state  (top_state  ),
     .shift_en   (shift_en   ),
-    .scale      (S_dout     ),
-    .bias       (B_dout     ),
+    .scale      (scale      ),
+    .bias       (bias       ),
     .scale_din  (scale_din  ),
     .scale_dout (scale_dout )
 );
@@ -334,6 +342,9 @@ assign maxpool_dout_all[0] = maxpool_dout0;
 assign maxpool_dout_all[1] = maxpool_dout1;
 assign maxpool_dout_all[2] = maxpool_dout2;
 assign maxpool_dout_all[3] = maxpool_dout3;
+
+wire [DIN_WIDTH*2-1:0] maxpool_dout_2channel;
+assign maxpool_dout_2channel = {maxpool_dout1,maxpool_dout0};
 // =============================================================================
 // DATA_FLOW
 // =============================================================================
@@ -344,6 +355,9 @@ wire [9:0] ram_addr [0:7];
 wire [7:0] ram_din  [0:7];
 wire [7:0] ram_dout [0:7];
 wire [SRAM_WIDTH*SRAM_NUM-1:0] ram_addr_pack;
+wire [32*DOUT_WIDTH-1:0]       fc_din;
+wire [DOUT_WIDTH*8*3-1:0] conv1D_select_dout;
+wire control;
 
 (* dont_touch = "true" *)
 DATA_FLOW#(
@@ -364,6 +378,7 @@ DATA_FLOW#(
     .select_dout1      (select_dout1      ),
     .select_dout2      (select_dout2      ),
     .select_dout3      (select_dout3      ),
+    .conv1D_select_dout(conv1D_select_dout),
     .conv_din0         (conv_din0         ),
     .conv_din1         (conv_din1         ),
     .conv_din2         (conv_din2         ),
@@ -376,6 +391,7 @@ DATA_FLOW#(
     .conv_2D_dout1     (conv_2D_dout1     ),
     .conv_2D_dout2     (conv_2D_dout2     ),
     .conv_2D_dout3     (conv_2D_dout3     ),
+    .conv1D_dout       (conv1D_dout       ),
     .scale_din         (scale_din         ),
     .sram_dout0        (ram_dout[0]       ),
     .sram_dout1        (ram_dout[1]       ),
@@ -421,14 +437,14 @@ CTRL#(
     .conv_end           (conv_end           ),
     .maxpool_valid_rise (maxpool_valid_rise ),
     .maxpool_flag       (maxpool_flag       ),
-    .cov1D_ram_addr     (cov1D_ram_addr     ),
+    .conv1D_ram_addr0   (conv1D_ram_addr0   ),
+    .conv1D_ram_addr1   (conv1D_ram_addr1   ),
     .top_state          (top_state          ),
     .state_switch       (state_switch       ),
     .img_width          (img_width          ),
     .img_height         (img_height         ),
     .W_addr             (W_addr             ),
-    .B_addr             (B_addr             ),
-    .S_addr             (S_addr             ),
+    .BN_addr            (BN_addr            ),
     .shift_en           (shift_en           ),
     .ram_we             (ram_we             ),
     .ram_addr           (ram_addr_pack      ),
@@ -438,19 +454,19 @@ CTRL#(
     .conv_mode          (conv_mode          )
 );
 
-wire [DOUT_WIDTH-1:0]        avg_pool_din0;
+wire [DOUT_WIDTH-1:0]       avg_pool_din0;
 wire [DOUT_WIDTH-1:0]       avg_pool_din1;
 wire                        avg_din_valid;
 wire [DOUT_WIDTH*2-1:0]     avg_pool_cov1D_dout;
 wire                        avg_dout_cov1D_valid;
 wire [DOUT_WIDTH-1:0]       avg_pool_dout;
 wire                        avg_dout_valid;
-wire [DIN_WIDTH*8-1:0]      ram_out;
+
 
 assign avg_pool_din0 = top_state == LAYER3 ?  maxpool_dout0 : scale_dout[DOUT_WIDTH-1:0];
 assign avg_pool_din1 = top_state == LAYER3 ?  8'b0          : scale_dout[DOUT_WIDTH*2-1:DOUT_WIDTH];
 assign avg_din_valid = (top_state == LAYER3 && maxpool_flag) || (maxpool_in_valid && top_state == LAYER5);
-
+(* dont_touch = "true" *)
 avg_pool#(
    .DIN_WIDTH (DIN_WIDTH),
    .DOUT_WIDTH(DOUT_WIDTH) 
@@ -467,17 +483,39 @@ avg_pool#(
     .avg_dout_valid       (avg_dout_valid )
 );
 
+wire [DIN_WIDTH*4-1:0]                ram_out;
+wire conv1D_din_valid;
+(* dont_touch = "true" *)
 CONV1D_RAM_CTRL u_CONV1D_RAM_CTRL(
-    .clk            (clk            ),
-    .rst_n          (rst_n          ),
-    .top_state      (top_state      ),
-    .avg_dout_valid (avg_dout_valid ),
-    .avg_pool_dout  (avg_pool_dout  ),
-    .cov1D_ram_addr (cov1D_ram_addr ),
-    .ram_out        (ram_out        )
+    .clk             (clk             ),
+    .rst_n           (rst_n           ),
+    .cnn_start       (cnn_start       ),
+    .top_state       (top_state       ),
+    .control         (control         ),
+    .avg_dout_valid  (avg_dout_valid  ),
+    .avg_pool_dout   (avg_pool_dout   ),
+    .maxpool_flag    (maxpool_flag    ),
+    .maxpool_dout_2channel(maxpool_dout_2channel),
+    .conv1D_ram_addr0(conv1D_ram_addr0),
+    .conv1D_ram_addr1(conv1D_ram_addr1),
+    .conv1D_din_valid(conv1D_din_valid),
+    .ram_out         (ram_out         )
 );
 
-
+(* dont_touch = "true" *)
+conv1D_data_select#(
+    .DIN_WIDTH (DIN_WIDTH ),
+    .DOUT_WIDTH(DOUT_WIDTH)
+)u_conv1D_data_select(
+    .clk                (clk                ),
+    .rst_n              (rst_n              ),
+    .top_state          (top_state          ),
+    .conv1D_din_valid   (conv1D_din_valid   ),
+    .ram_out            (ram_out            ),
+    .control            (control            ),
+    .conv1D_select_dout (conv1D_select_dout ),
+    .conv1D_dout_valid  (conv1D_dout_valid  )
+);
 
 (* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM0(

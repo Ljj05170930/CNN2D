@@ -14,16 +14,15 @@ module CTRL#(
     input wire                      conv_end,                                     
     input wire                      maxpool_valid_rise,
     input wire                      maxpool_flag,
-    input wire [5:0]                cov1D_ram_addr, 
-
+    input wire [6:0]                conv1D_ram_addr0, 
+    input wire [6:0]                conv1D_ram_addr1,
     output [8:0]                    top_state,
     output wire                     state_switch,
     output reg  [MAX_WIDTH-1:0]     img_width, 
     output reg  [MAX_WIDTH-1:0]     img_height,
 
-    output reg  [5:0]              W_addr,
-    output reg  [7:0]              B_addr,
-    output reg  [7:0]              S_addr,
+    output reg  [6:0]              W_addr,
+    output reg  [7:0]              BN_addr,
     output reg                     shift_en,
 
     output reg  [SRAM_NUM-1:0]                     ram_we,
@@ -45,7 +44,7 @@ localparam LAYER5 = 9'b001000000;
 localparam LAYER6 = 9'b010000000;
 localparam LAYER7 = 9'b100000000;
 
-reg [8:0] current_state, next_state,current_state_ff,next_state_ff;
+reg [8:0] current_state, next_state,current_state_ff,next_state_ff,current_state_ff0;
 reg layer0_ready, layer1_ready,layer2_ready, layer3_ready;
 
 always @(posedge clk or negedge rst_n) begin
@@ -60,9 +59,11 @@ end
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
         current_state_ff <= 9'b0;
+        current_state_ff0 <= 9'b0;
     end
     else begin
         current_state_ff <= current_state;
+        current_state_ff0 <= current_state_ff;
     end
 end
 
@@ -85,11 +86,18 @@ always @(*) begin
         LAYER1: next_state = layer1_ready ? LAYER2 : LAYER1;
         LAYER2: next_state = layer2_ready ? LAYER3 : LAYER2;
         LAYER3: begin
-            if(layer3_ready && cov1D_ram_addr == 6'd63) 
+            if(layer3_ready && conv1D_ram_addr0 == 7'd127) 
                 next_state = LAYER4;
             else next_state = layer3_ready ? IDLE : LAYER3;
         end
-        LAYER4:;
+        LAYER4:begin
+            if(conv1D_ram_addr1 == 7'd55) 
+                next_state = LAYER5;
+            else next_state = LAYER4;
+        end 
+        LAYER5:begin
+            
+        end
         default: next_state = IDLE;
     endcase
 end
@@ -108,6 +116,14 @@ always @(posedge clk or negedge rst_n) begin
                     W_addr <= W_addr + 1'b1;
                 end 
             end
+            LAYER4,LAYER5:begin
+                if (current_state != current_state_ff) begin
+                    W_addr <= W_addr + 1'b1;
+                end
+                else if(maxpool_valid_rise) begin
+                    W_addr <= W_addr + 1'b1;
+                end 
+            end
             default: W_addr <= 6'b0;
         endcase
     end
@@ -116,34 +132,36 @@ end
 reg [2:0] shift_cnt;
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
-        S_addr <= 6'b0;
-        B_addr <= 6'b0;
+        BN_addr <= 6'b0;
     end
     else begin
         case (current_state)
             IDLE:begin
-                S_addr <= 6'b0;
-                B_addr <= 6'b0;
+                BN_addr <= 6'b0;
             end 
             LAYER0:begin
                 if(shift_cnt == 3'b100)begin
-                    S_addr <= S_addr;
-                    B_addr <= B_addr;
+                    BN_addr <= BN_addr;
                 end
                 else begin
-                    S_addr <= S_addr + 1'b1;
-                    B_addr <= B_addr + 1'b1;
+                    BN_addr <= BN_addr + 1'b1;
+                end
+            end
+            LAYER4,LAYER5:begin
+                if(current_state_ff != next_state_ff) begin
+                    BN_addr <= BN_addr + 1'b1;
+                end
+                else if(shift_en) begin
+                    BN_addr <= BN_addr + 1'b1;
                 end
             end
             LAYER1,LAYER2,LAYER3:begin
                 if(maxpool_valid_rise) begin
-                    S_addr <= S_addr + 1'b1;
-                    B_addr <= B_addr + 1'b1;
+                    BN_addr <= BN_addr + 1'b1;
                 end
             end
             default:begin
-                S_addr <= 6'b0;
-                B_addr <= 6'b0;
+                BN_addr <= 6'b0;
             end 
         endcase
     end
@@ -166,6 +184,22 @@ always @(posedge clk or negedge rst_n) begin
                     shift_cnt <= shift_cnt + 1'b1;
                 end
             end 
+            LAYER4:begin
+                if(maxpool_valid_rise) begin
+                    shift_en  <= 1'b1;
+                    shift_cnt <= 3'd1;
+                end
+                else if (shift_cnt == 3'b010) begin
+                    shift_cnt <= shift_cnt;
+                    shift_en  <= 1'b0;
+                end
+                else if (shift_en) begin
+                    shift_cnt <= shift_cnt + 1'b1;
+                end
+            end
+            LAYER5:begin
+                
+            end
             default:begin
                 shift_en <= 1'b0;
                 shift_cnt <= 2'b0;
@@ -217,7 +251,7 @@ always @(posedge clk or negedge rst_n) begin
             LAYER4: begin
                 pool_en    <= 4'b0011;
                 img_height <= 6'd1;
-                img_width  <= 6'd16;
+                img_width  <= 6'd14;
                 conv_mode  <= 1'b1;
             end
             LAYER5: begin
@@ -332,6 +366,8 @@ always @(posedge clk or negedge rst_n) begin
                     sram_write_num <= sram_write_num + 1'b1;
                 end
             end
+            
+
             default: begin
                 sram_write_select <= 2'b00;
                 sram_write_id     <= 6'b0;   

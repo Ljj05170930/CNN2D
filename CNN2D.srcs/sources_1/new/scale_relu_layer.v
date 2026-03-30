@@ -30,6 +30,16 @@ localparam LAYER7 = 9'b100000000;
 reg [BIAS_WIDTH-1:0]  bias_reg [3:0];
 reg [SCALE_WIDTH-1:0] scale_reg[3:0];
 
+reg shift_en_ff;
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
+        shift_en_ff <= 1'b0;
+    end
+    else begin
+        shift_en_ff <= shift_en;
+    end
+end
+
 integer j;
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
@@ -56,7 +66,17 @@ always @(posedge clk or negedge rst_n) begin
                     scale_reg[3] <= scale;
                 end
             end
-            LAYER1,LAYER2,LAYER3,LAYER7:begin
+            LAYER4,LAYER5:begin
+                if (shift_en_ff) begin
+                    for (j = 1; j < 4; j = j + 1) begin
+                        bias_reg[j-1]  <= bias_reg[j];
+                        scale_reg[j-1] <= scale_reg[j];
+                    end
+                    bias_reg[1]  <= bias;
+                    scale_reg[1] <= scale;
+                end
+            end
+            LAYER1,LAYER2,LAYER3,LAYER6,LAYER7:begin
                 for (j = 0; j < 4; j = j + 1) begin
                     bias_reg[j] <= bias;
                     scale_reg[j] <= scale;
