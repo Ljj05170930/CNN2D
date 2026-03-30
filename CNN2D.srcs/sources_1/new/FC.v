@@ -7,8 +7,12 @@ module FC #(
     input  wire                          rst_n,
     input  wire [8:0]                    top_state,
     input  wire                          maxpool_valid_ff,
+    input  wire [7:0]                    FC_din,
     input  wire                          avg_dout_cov1D_valid,
     input  wire [15:0]                   avg_pool_cov1D_dout,
+    output reg                           layer5_ready,
+    output reg                           layer6_ready,
+    output reg [4:0]                     fc_cnt, 
     output wire [32*DIN_WIDTH-1:0]       fc_din
 );
 
@@ -22,40 +26,42 @@ localparam LAYER5 = 9'b001000000;
 localparam LAYER6 = 9'b010000000;
 localparam LAYER7 = 9'b100000000;
 
-    reg [1:0]          fc_cnt;
-    reg [4:0]          fc_cnt_id;
     reg [DIN_WIDTH-1:0] fc_rem0 [0:31];
     reg [DIN_WIDTH-1:0] fc_rem1 [0:31];
-
     integer j;
-always @(posedge clk or negedge rst_n) begin
+
+    always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
-            fc_cnt    <= 2'b0;
-            fc_cnt_id <= 5'b0;
+            fc_cnt       <= 4'b0;
+            layer5_ready <= 1'b0;
+            layer6_ready <= 1'b0;
         end
         else begin
             case (top_state)
-                LAYER6: begin
+                LAYER5: begin
                     if (avg_dout_cov1D_valid) begin
-                        if (fc_cnt == 2'd3) begin
-                            fc_cnt <= 2'b0;
-                            if (fc_cnt_id == 5'd3)
-                                fc_cnt_id <= 5'b0;
-                            else
-                                fc_cnt_id <= fc_cnt_id + 1'b1;
+                        if (fc_cnt == 5'd15) begin
+                            fc_cnt       <= 5'b0;
+                            layer5_ready <= 1'b1;
                         end
-                        else
+                        else begin
                             fc_cnt <= fc_cnt + 1'b1;
+                        end
                     end
                 end
-                LAYER7: begin
+                LAYER6: begin
                     if (maxpool_valid_ff) begin
-                        fc_cnt <= fc_cnt + 1'b1;
+                        if(fc_cnt == 5'd31)begin
+                            layer6_ready <= 1'b1;
+                            fc_cnt  <= 5'b0;
+                        end
+                        else fc_cnt <= fc_cnt + 1'b1;
                     end
                 end
                 default: begin
-                    fc_cnt    <= 2'b0;
-                    fc_cnt_id <= 5'b0;
+                    fc_cnt       <= 4'b0;
+                    layer5_ready <= 1'b0;
+                    layer6_ready <= 1'b0;
                 end
             endcase
         end
@@ -63,12 +69,37 @@ always @(posedge clk or negedge rst_n) begin
 
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
-            for (j = 0; j < 32; j = j + 1)
+            for (j = 0; j < 32; j = j + 1)begin
                 fc_rem0[j] <= 8'b0;
+                fc_rem1[j] <= 8'b0;
+            end
         end
-        else if (avg_dout_cov1D_valid) begin
-            fc_rem0[fc_cnt +     (fc_cnt_id << 3)] <= avg_pool_cov1D_dout[7:0];
-            fc_rem0[fc_cnt + 4 + (fc_cnt_id << 3)] <= avg_pool_cov1D_dout[15:8];
+        else begin
+            case (top_state)
+                LAYER5:begin
+                    if (avg_dout_cov1D_valid) begin
+                        fc_rem0[fc_cnt << 1]   <= avg_pool_cov1D_dout[7:0];
+                        fc_rem0[(fc_cnt << 1) + 1] <= avg_pool_cov1D_dout[15:8];
+                    end
+                end 
+                LAYER6:begin
+                    if (maxpool_valid_ff) begin
+                        fc_rem1[fc_cnt]   <= FC_din;
+                    end
+                end 
+                LAYER7:begin
+                    for (j = 0; j < 32; j = j + 1)begin
+                        fc_rem0[j] <= fc_rem0[j];
+                        fc_rem1[j] <= fc_rem1[j];
+                    end
+                end
+                default: begin
+                    for (j = 0; j < 32; j = j + 1)begin
+                        fc_rem0[j] <= 8'b0;
+                        fc_rem1[j] <= 8'b0;
+                    end
+                end 
+            endcase
         end
     end
 

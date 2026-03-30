@@ -14,6 +14,7 @@ module scale_relu_layer#(
     input wire [SCALE_WIDTH-1:0]       scale,
     input wire signed [BIAS_WIDTH-1:0] bias,
     input wire signed [SCALE_IN_WIDTH*4-1:0] scale_din,
+    output wire signed [DOUT_WIDTH-1:0] dout_finial,
     output wire [DOUT_WIDTH*4-1:0] scale_dout
 );
 
@@ -29,8 +30,11 @@ localparam LAYER7 = 9'b100000000;
 
 reg [BIAS_WIDTH-1:0]  bias_reg [3:0];
 reg [SCALE_WIDTH-1:0] scale_reg[3:0];
-
+wire [DOUT_WIDTH-1:0] dout_finial_mem [3:0];
 reg shift_en_ff;
+
+assign dout_finial = dout_finial_mem[0];
+
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
         shift_en_ff <= 1'b0;
@@ -104,6 +108,7 @@ generate
             .scale (scale_reg [i]  ),
             .bias  (bias_reg  [i]  ),
             .din   (scale_din [i*SCALE_IN_WIDTH+:SCALE_IN_WIDTH]),
+            .dout_finial(dout_finial_mem[i]),
             .dout  (scale_dout[i*DOUT_WIDTH+:DOUT_WIDTH])
         );
     end

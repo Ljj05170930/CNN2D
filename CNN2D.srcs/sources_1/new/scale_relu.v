@@ -19,6 +19,7 @@ module scale_relu#(
     input  wire signed [BIAS_WIDTH-1:0]     bias,    // Signed bias term
     input  wire signed [SCALE_IN_WIDTH-1:0] din,     // Signed accumulator input
 
+    output wire signed [DOUT_WIDTH-1:0] dout_finial,
     output wire        [DOUT_WIDTH-1:0] dout         // Unsigned scaled output
 );
 
@@ -31,6 +32,7 @@ wire signed [SCALE_IN_WIDTH-1:0]  dout_ff;
 wire signed [SCALE_IN_WIDTH-1:0]  dout_reg;
 
 assign dout_ff =  din + bias ;
+assign dout_finial =  (dout_ff + (1 <<< scale)) >>> scale;
 assign dout_reg = dout_ff[SCALE_IN_WIDTH-1] ? 20'b0 : dout_ff;
 
 // =============================================================================

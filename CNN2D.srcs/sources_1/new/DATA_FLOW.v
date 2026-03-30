@@ -20,6 +20,7 @@ module DATA_FLOW#(
     input wire [DIN_WIDTH*NUM-1:0] select_dout2,
     input wire [DIN_WIDTH*NUM-1:0] select_dout3,
     input wire [DOUT_WIDTH*8*3-1:0] conv1D_select_dout,
+    input wire [32*DOUT_WIDTH-1:0] fc_din,
     output reg [DIN_WIDTH*NUM-1:0] conv_din0,
     output reg [DIN_WIDTH*NUM-1:0] conv_din1,
     output reg [DIN_WIDTH*NUM-1:0] conv_din2,
@@ -164,18 +165,12 @@ always @(*) begin
             conv_din2 = {24'b0,conv1D_select_dout[DIN_WIDTH*8*3-1:DIN_WIDTH*NUM*2]};
             conv_din3 = 72'b0;
         end
-        // LAYER6:begin
-        //     conv_din0 = fc_din[DIN_WIDTH*NUM-1:0];
-        //     conv_din1 = fc_din[DIN_WIDTH*NUM*2-1:DIN_WIDTH*NUM];
-        //     conv_din2 = fc_din[DIN_WIDTH*NUM*3-1:2*DIN_WIDTH*NUM];
-        //     conv_din3 = {32'b0,fc_din[32*DIN_WIDTH-1:3*DIN_WIDTH*NUM]};
-        // end
-        // LAYER7:begin
-        //     conv_din0 = {fc_rem1[8],fc_rem1[7],fc_rem1[6],fc_rem1[5],fc_rem1[4],fc_rem1[3],fc_rem1[2],fc_rem1[1],fc_rem1[0]};
-        //     conv_din1 = {fc_rem1[17],fc_rem1[16],fc_rem1[15],fc_rem1[14],fc_rem1[13],fc_rem1[12],fc_rem1[11],fc_rem1[10],fc_rem1[9]};
-        //     conv_din2 = {fc_rem1[26],fc_rem1[25],fc_rem1[24],fc_rem1[23],fc_rem1[22],fc_rem1[21],fc_rem1[20],fc_rem1[19],fc_rem1[18]};
-        //     conv_din3 = {40'b0,fc_rem1[31],fc_rem1[30],fc_rem1[29],fc_rem1[28],fc_rem1[27]};
-        // end
+        LAYER6,LAYER7:begin
+            conv_din0 = fc_din[DIN_WIDTH*NUM-1:0];
+            conv_din1 = fc_din[DIN_WIDTH*NUM*2-1:DIN_WIDTH*NUM];
+            conv_din2 = fc_din[DIN_WIDTH*NUM*3-1:2*DIN_WIDTH*NUM];
+            conv_din3 = {32'b0,fc_din[32*DIN_WIDTH-1:3*DIN_WIDTH*NUM]};
+        end
         default: begin
             conv_din0 = 72'b0;
             conv_din1 = 72'b0;

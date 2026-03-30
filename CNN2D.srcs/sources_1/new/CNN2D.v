@@ -56,8 +56,14 @@ wire [6:0] conv1D_ram_addr1;
 // =============================================================================
 wire [6:0]   W_addr;
 wire [143:0] W_dout;
+reg  maxpool_in_valid; // pixel valid strobe
+reg  maxpool_valid_ff;
+wire [DIN_WIDTH-1:0]  maxpool_din0;     // channel 0 pixel from upstream
+wire [DIN_WIDTH-1:0]  dout_finial;
 
-(* dont_touch = "true" *)
+assign dout_valid = maxpool_valid_ff && top_state == LAYER7;
+assign dout = dout_valid ? dout_finial : 8'b0;
+
 Weight_Rom u_Weight_Rom(
     .clka  (clk      ),
     .ena   (cnn_start),
@@ -108,7 +114,7 @@ wire [MAX_WIDTH-1:0]  img_width;        // active feature-map width
 wire [MAX_WIDTH-1:0]  img_height;       // active feature-map height
 wire select_din_valid;
 wire select_valid_ff0;
-(* dont_touch = "true" *)
+
 DATA_SELECT #(
     .DIN_WIDTH  (DIN_WIDTH ),
     .DOUT_WIDTH (DIN_WIDTH ),   // Window pixel width equals input pixel width
@@ -168,7 +174,7 @@ wire signed [DOUT_WIDTH_1D*3*4-1:0]   conv1D_dout;
 wire                                  conv_out1D_valid;
 wire                                  conv_out2D_valid;
 wire                                  conv1D_dout_valid;
-
+wire                                  FC_valid;
 always @(*) begin
     conv_in_valid = 1'b0;
     begin
@@ -179,6 +185,8 @@ always @(*) begin
             LAYER3: conv_in_valid = data_select_valid;
             LAYER4: conv_in_valid = conv1D_dout_valid;
             LAYER5: conv_in_valid = conv1D_dout_valid;
+            LAYER6: conv_in_valid = FC_valid;
+            LAYER7: conv_in_valid = FC_valid;
             default: begin
                 conv_in_valid = 1'b0;
             end
@@ -186,7 +194,6 @@ always @(*) begin
     end
 end
 
-(* dont_touch = "true" *)
 conv_layer #(
     .DIN_WIDTH    (DIN_WIDTH    ),
     .NUM          (NUM          ),
@@ -230,7 +237,6 @@ wire shift_en;
 wire [SCALE_IN_WIDTH*4-1:0] scale_din;
 wire [DOUT_WIDTH*4-1:0]     scale_dout;
 
-(* dont_touch = "true" *)
 scale_relu_layer#(
     .SCALE_IN_WIDTH(SCALE_IN_WIDTH),
     .DOUT_WIDTH(DOUT_WIDTH),
@@ -243,6 +249,7 @@ scale_relu_layer#(
     .shift_en   (shift_en   ),
     .scale      (scale      ),
     .bias       (bias       ),
+    .dout_finial(dout_finial),
     .scale_din  (scale_din  ),
     .scale_dout (scale_dout )
 );
@@ -253,16 +260,16 @@ scale_relu_layer#(
 // =============================================================================
 
 // 4-channel pixel inputs to the pooling layer
-wire [DIN_WIDTH-1:0]  maxpool_din0;     // channel 0 pixel from upstream
+
 wire [DIN_WIDTH-1:0]  maxpool_din1;     // channel 1 pixel from upstream
 wire [DIN_WIDTH-1:0]  maxpool_din2;     // channel 2 pixel from upstream
 wire [DIN_WIDTH-1:0]  maxpool_din3;     // channel 3 pixel from upstream
 
 // Shared spatial and control signals produced by the internal control unit
 
-reg                   maxpool_in_valid; // pixel valid strobe
+
 wire                  maxpool_valid_rise;
-reg                   maxpool_valid_ff;
+
 wire [3:0]            pool_en;          // per-channel pool enable, bit[i] -> ch i
 
 // 4-channel pooled outputs
@@ -304,7 +311,7 @@ assign maxpool_din0 = scale_dout[DOUT_WIDTH-1:0];
 assign maxpool_din1 = scale_dout[DOUT_WIDTH*2-1:DOUT_WIDTH];
 assign maxpool_din2 = scale_dout[DOUT_WIDTH*3-1:DOUT_WIDTH*2];
 assign maxpool_din3 = scale_dout[DOUT_WIDTH*4-1:DOUT_WIDTH*3];
-(* dont_touch = "true" *)
+
 maxpool_layer #(
     .DIN_WIDTH  (DIN_WIDTH ),
     .MAX_WIDTH  (MAX_WIDTH ),
@@ -358,8 +365,10 @@ wire [SRAM_WIDTH*SRAM_NUM-1:0] ram_addr_pack;
 wire [32*DOUT_WIDTH-1:0]       fc_din;
 wire [DOUT_WIDTH*8*3-1:0] conv1D_select_dout;
 wire control;
+wire layer5_ready;
+wire layer6_ready;
+wire [4:0] fc_cnt;
 
-(* dont_touch = "true" *)
 DATA_FLOW#(
     .NUM(NUM),
     .DIN_WIDTH(DIN_WIDTH),
@@ -379,6 +388,7 @@ DATA_FLOW#(
     .select_dout2      (select_dout2      ),
     .select_dout3      (select_dout3      ),
     .conv1D_select_dout(conv1D_select_dout),
+    .fc_din            (fc_din            ),
     .conv_din0         (conv_din0         ),
     .conv_din1         (conv_din1         ),
     .conv_din2         (conv_din2         ),
@@ -422,7 +432,7 @@ generate
     end
 endgenerate
 
-(* dont_touch = "true" *)
+
 CTRL#(
     .SRAM_WIDTH(SRAM_WIDTH),
     .MAX_WIDTH(MAX_WIDTH),
@@ -435,6 +445,9 @@ CTRL#(
     .din_valid          (din_valid          ),
     .conv_rs_end        (conv_rs_end        ),
     .conv_end           (conv_end           ),
+    .fc_cnt             (fc_cnt             ),
+    .layer5_ready       (layer5_ready       ),
+    .layer6_ready       (layer6_ready       ),
     .maxpool_valid_rise (maxpool_valid_rise ),
     .maxpool_flag       (maxpool_flag       ),
     .conv1D_ram_addr0   (conv1D_ram_addr0   ),
@@ -444,7 +457,8 @@ CTRL#(
     .img_width          (img_width          ),
     .img_height         (img_height         ),
     .W_addr             (W_addr             ),
-    .BN_addr            (BN_addr            ),
+    .BN_addr            (BN_addr            ), 
+    .FC_valid           (FC_valid           ),
     .shift_en           (shift_en           ),
     .ram_we             (ram_we             ),
     .ram_addr           (ram_addr_pack      ),
@@ -466,7 +480,7 @@ wire                        avg_dout_valid;
 assign avg_pool_din0 = top_state == LAYER3 ?  maxpool_dout0 : scale_dout[DOUT_WIDTH-1:0];
 assign avg_pool_din1 = top_state == LAYER3 ?  8'b0          : scale_dout[DOUT_WIDTH*2-1:DOUT_WIDTH];
 assign avg_din_valid = (top_state == LAYER3 && maxpool_flag) || (maxpool_in_valid && top_state == LAYER5);
-(* dont_touch = "true" *)
+
 avg_pool#(
    .DIN_WIDTH (DIN_WIDTH),
    .DOUT_WIDTH(DOUT_WIDTH) 
@@ -485,7 +499,7 @@ avg_pool#(
 
 wire [DIN_WIDTH*4-1:0]                ram_out;
 wire conv1D_din_valid;
-(* dont_touch = "true" *)
+
 CONV1D_RAM_CTRL u_CONV1D_RAM_CTRL(
     .clk             (clk             ),
     .rst_n           (rst_n           ),
@@ -502,7 +516,23 @@ CONV1D_RAM_CTRL u_CONV1D_RAM_CTRL(
     .ram_out         (ram_out         )
 );
 
-(* dont_touch = "true" *)
+FC#(
+    .DIN_WIDTH(DIN_WIDTH),
+    .NUM(NUM)
+) u_FC(
+    .clk                  (clk                  ),
+    .rst_n                (rst_n                ),
+    .top_state            (top_state            ),
+    .maxpool_valid_ff     (maxpool_valid_ff     ),
+    .FC_din               (maxpool_din0         ),
+    .avg_dout_cov1D_valid (avg_dout_cov1D_valid ),
+    .avg_pool_cov1D_dout  (avg_pool_cov1D_dout  ),
+    .fc_cnt               (fc_cnt               ),
+    .layer5_ready         (layer5_ready         ),  
+    .layer6_ready         (layer6_ready         ), 
+    .fc_din               (fc_din               )
+);
+
 conv1D_data_select#(
     .DIN_WIDTH (DIN_WIDTH ),
     .DOUT_WIDTH(DOUT_WIDTH)
@@ -517,7 +547,6 @@ conv1D_data_select#(
     .conv1D_dout_valid  (conv1D_dout_valid  )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM0(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -527,7 +556,6 @@ PINGPONG_RAM u_PINGPONG_RAM0(
     .douta (ram_dout[0] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM1(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -537,7 +565,6 @@ PINGPONG_RAM u_PINGPONG_RAM1(
     .douta (ram_dout[1] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM2(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -547,7 +574,6 @@ PINGPONG_RAM u_PINGPONG_RAM2(
     .douta (ram_dout[2] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM3(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -557,7 +583,6 @@ PINGPONG_RAM u_PINGPONG_RAM3(
     .douta (ram_dout[3] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM4(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -567,7 +592,6 @@ PINGPONG_RAM u_PINGPONG_RAM4(
     .douta (ram_dout[4] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM5(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -577,7 +601,6 @@ PINGPONG_RAM u_PINGPONG_RAM5(
     .douta (ram_dout[5] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM6(
     .clka  (clk         ),
     .ena   (cnn_start   ),
@@ -587,7 +610,6 @@ PINGPONG_RAM u_PINGPONG_RAM6(
     .douta (ram_dout[6] )
 );
 
-(* dont_touch = "true" *)
 PINGPONG_RAM u_PINGPONG_RAM7(
     .clka  (clk         ),
     .ena   (cnn_start   ),

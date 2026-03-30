@@ -392,7 +392,6 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-(* dont_touch = "true" *)
 CONV1D_RAM u_CONV1D_RAM0(
     .clka  (clk             ),
     .ena   (cnn_start       ),
@@ -402,7 +401,6 @@ CONV1D_RAM u_CONV1D_RAM0(
     .douta (ram0_out        )
 );
 
-(* dont_touch = "true" *)
 CONV1D_RAM u_CONV1D_RAM1(
     .clka  (clk             ),
     .ena   (cnn_start       ),

@@ -11,7 +11,10 @@ module CTRL#(
     input wire                      cnn_start,
     input wire                      din_valid,     
     input wire                      conv_rs_end, 
-    input wire                      conv_end,                                     
+    input wire                      conv_end, 
+    input wire [4:0]                fc_cnt,        
+    input wire                      layer5_ready,      
+    input wire                      layer6_ready,                              
     input wire                      maxpool_valid_rise,
     input wire                      maxpool_flag,
     input wire [6:0]                conv1D_ram_addr0, 
@@ -24,7 +27,7 @@ module CTRL#(
     output reg  [6:0]              W_addr,
     output reg  [7:0]              BN_addr,
     output reg                     shift_en,
-
+    output reg                     FC_valid,
     output reg  [SRAM_NUM-1:0]                     ram_we,
     output wire [SRAM_WIDTH*SRAM_NUM-1:0]          ram_addr,
     output reg  [1:0]              sram_write_select,
@@ -96,7 +99,13 @@ always @(*) begin
             else next_state = LAYER4;
         end 
         LAYER5:begin
-            
+           next_state = layer5_ready ? LAYER6 : LAYER5; 
+        end
+        LAYER6:begin
+            next_state = layer6_ready ? LAYER7 : LAYER6; 
+        end
+        LAYER7:begin
+            next_state = maxpool_valid_rise ? IDLE : LAYER7;
         end
         default: next_state = IDLE;
     endcase
@@ -116,11 +125,16 @@ always @(posedge clk or negedge rst_n) begin
                     W_addr <= W_addr + 1'b1;
                 end 
             end
-            LAYER4,LAYER5:begin
+            LAYER4:begin
                 if (current_state != current_state_ff) begin
                     W_addr <= W_addr + 1'b1;
                 end
                 else if(maxpool_valid_rise) begin
+                    W_addr <= W_addr + 1'b1;
+                end 
+            end
+            LAYER5,LAYER6,LAYER7:begin
+                if(maxpool_valid_rise) begin
                     W_addr <= W_addr + 1'b1;
                 end 
             end
@@ -155,7 +169,7 @@ always @(posedge clk or negedge rst_n) begin
                     BN_addr <= BN_addr + 1'b1;
                 end
             end
-            LAYER1,LAYER2,LAYER3:begin
+            LAYER1,LAYER2,LAYER3,LAYER6,LAYER7:begin
                 if(maxpool_valid_rise) begin
                     BN_addr <= BN_addr + 1'b1;
                 end
@@ -166,6 +180,31 @@ always @(posedge clk or negedge rst_n) begin
         endcase
     end
 end
+
+reg maxpool_valid_rise_ff;
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
+        maxpool_valid_rise_ff <= 1'b0;
+    end
+    else begin
+        maxpool_valid_rise_ff <= maxpool_valid_rise;
+    end
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n)begin
+        FC_valid <= 1'b0;
+    end
+    else begin
+        case (current_state)
+            LAYER6:begin
+                FC_valid <= current_state_ff != LAYER6 || maxpool_valid_rise_ff;
+            end 
+            default:FC_valid <= 1'b0; 
+        endcase
+    end
+end
+
 
 always @(posedge clk or negedge rst_n) begin
     if(~rst_n)begin
@@ -184,8 +223,8 @@ always @(posedge clk or negedge rst_n) begin
                     shift_cnt <= shift_cnt + 1'b1;
                 end
             end 
-            LAYER4:begin
-                if(maxpool_valid_rise) begin
+            LAYER4,LAYER5:begin
+                if(maxpool_valid_rise && fc_cnt != 5'd15) begin
                     shift_en  <= 1'b1;
                     shift_cnt <= 3'd1;
                 end
@@ -196,9 +235,6 @@ always @(posedge clk or negedge rst_n) begin
                 else if (shift_en) begin
                     shift_cnt <= shift_cnt + 1'b1;
                 end
-            end
-            LAYER5:begin
-                
             end
             default:begin
                 shift_en <= 1'b0;
@@ -253,6 +289,18 @@ always @(posedge clk or negedge rst_n) begin
                 img_height <= 6'd1;
                 img_width  <= 6'd14;
                 conv_mode  <= 1'b1;
+            end
+            LAYER5: begin
+                pool_en    <= 4'b0000;
+                img_height <= 6'b0;
+                img_width  <= 6'b0;
+                conv_mode  <= 1'b1;
+            end
+            LAYER6: begin
+                pool_en    <= 4'b0000;
+                img_height <= 6'b0;
+                img_width  <= 6'b0;
+                conv_mode  <= 1'b0;
             end
             LAYER5: begin
                 pool_en    <= 4'b0000;
