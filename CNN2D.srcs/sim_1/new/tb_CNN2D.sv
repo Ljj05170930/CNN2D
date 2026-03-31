@@ -15,18 +15,19 @@ reg                             clk;
 reg                             rst_n;
 reg  [DIN_WIDTH-1:0]            din_select;
 reg                             din_valid;
-reg                             cnn_start;
+
+wire [7:0] dout;
+wire dout_valid;
 
 reg [DIN_WIDTH-1:0]             data_ram [0:TOTAL_PIXELS-1];
 
-CNN2D u_CNN2D(
+CNN_top u_CNN_top(
     .clk        (clk        ),
     .rst_n      (rst_n      ),
-    .cnn_start  (cnn_start  ),
     .din        (din_select ),
     .din_valid  (din_valid  ),
-    .dout(),
-    .dout_valid()
+    .dout(dout),
+    .dout_valid(dout_valid)
 );
 
 localparam IDLE   = 9'b000000001;
@@ -40,13 +41,6 @@ localparam LAYER6 = 9'b010000000;
 localparam LAYER7 = 9'b100000000;
 
 always #(CLK_PERIOD/2) clk = ~clk;
-
-initial begin
-    clk = 1;
-    rst_n = 0;
-    #(200);          // 保持复位 200 ns
-    rst_n = 1;
-end
 
 task automatic open_file_w;
     output integer fd;
@@ -117,69 +111,86 @@ initial begin
     );
 end
 
-dump_if_dec #(.WIDTH(20)) 
-u_dump_layer0_mid (
-    .clk  (clk),
-    .fd   (layer_0_mid),
-    .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER0),
-    .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
-);
+// dump_if_dec #(.WIDTH(20)) 
+// u_dump_layer0_mid (
+//     .clk  (clk),
+//     .fd   (layer_0_mid),
+//     .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER0),
+//     .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
+// );
 
-dump_array_if #(
-    .POOL_WIDTH(8),
-    .PE_NUM    (4)
-) u_dump_layer_0_out (
-    .clk (clk),
-    .fd  (layer_0_out),
-    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER0),
-    .data(u_CNN2D.maxpool_dout_all)
-);
+// dump_array_if #(
+//     .POOL_WIDTH(8),
+//     .PE_NUM    (4)
+// ) u_dump_layer_0_out (
+//     .clk (clk),
+//     .fd  (layer_0_out),
+//     .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER0),
+//     .data(u_CNN2D.maxpool_dout_all)
+// );
 
-dump_if_dec #(.WIDTH(8)) 
-u_dump_layer1_mid (
-    .clk  (clk),
-    .fd   (layer_1_out),
-    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER1),
-    .data (u_CNN2D.maxpool_dout0)
-);
+// dump_if_dec #(.WIDTH(8)) 
+// u_dump_layer1_mid (
+//     .clk  (clk),
+//     .fd   (layer_1_out),
+//     .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER1),
+//     .data (u_CNN2D.maxpool_dout0)
+// );
 
-dump_if_dec #(.WIDTH(8)) 
-u_dump_layer2_out (
-    .clk  (clk),
-    .fd   (layer_2_out),
-    .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER2),
-    .data (u_CNN2D.maxpool_dout0)
-);
+// dump_if_dec #(.WIDTH(8)) 
+// u_dump_layer2_out (
+//     .clk  (clk),
+//     .fd   (layer_2_out),
+//     .cond(u_CNN2D.maxpool_flag && u_CNN2D.top_state == LAYER2),
+//     .data (u_CNN2D.maxpool_dout0)
+// );
 
-dump_if_dec #(.WIDTH(8)) 
-u_dump_layer3_out (
-    .clk  (clk),
-    .fd   (layer_3_out),
-    .cond(u_CNN2D.avg_dout_valid),
-    .data (u_CNN2D.avg_pool_dout)
-);
+// dump_if_dec #(.WIDTH(8)) 
+// u_dump_layer3_out (
+//     .clk  (clk),
+//     .fd   (layer_3_out),
+//     .cond(u_CNN2D.avg_dout_valid),
+//     .data (u_CNN2D.avg_pool_dout)
+// );
 
-dump_if_dec #(.WIDTH(20)) 
-u_dump_layer3_mid (
-    .clk  (clk),
-    .fd   (layer_3_mid),
-    .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER3),
-    .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
-);
+// dump_if_dec #(.WIDTH(20)) 
+// u_dump_layer3_mid (
+//     .clk  (clk),
+//     .fd   (layer_3_mid),
+//     .cond (u_CNN2D.maxpool_valid_ff && u_CNN2D.top_state == LAYER3),
+//     .data (u_CNN2D.u_scale_relu_layer.scale_4channel[0].u_scale_relu.dout_reg)
+// );
 
-
-initial begin
     integer addr;
     integer i;
-    din_select = 0;
-    din_valid  = 0;
-    cnn_start  = 0;
-    wait (rst_n == 1);
-    #(CLK_PERIOD * 2);
+    integer j;
+initial begin
+        addr = 0;
+        i = 0;
+        clk = 0;
+        rst_n          = 1'b0;
+        din_valid       = 1'b0;
+        din_select = {8{1'b0}};
 
-    cnn_start = 1;
-    addr = 0;
-    i = 0;
+        repeat (10) @(posedge clk);
+        rst_n = 1'b1;
+        repeat (5) @(posedge clk);
+
+        // 连续送 16*62*50 个点
+        @(posedge clk);
+        din_valid <= 1'b1;
+
+        for (j = 0; j < 49600; j = j + 1) begin
+            din_select <= data_ram[j];
+            @(posedge clk);
+        end
+
+        // 输入结束
+        din_valid       <= 1'b0;
+        din_select      <= 0;
+
+        repeat (50) @(posedge clk);
+
     #200
     repeat(16) begin
         while (addr < PIXELS) begin

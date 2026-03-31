@@ -6,6 +6,8 @@ CNN2D.sim/
 CNN2D.srcs/sources_1/ip
 *.xpr
 Inference_251021/
+CLAUDE.md
+*.json
 *.txt
 *.pyc
 *.coe
